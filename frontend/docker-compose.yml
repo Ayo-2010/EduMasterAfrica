@@ -1,0 +1,37 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: edumaster
+      POSTGRES_PASSWORD: edumaster123
+      POSTGRES_DB: edumaster
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build: 
+      context: ../edumaster-backend
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://edumaster:edumaster123@postgres:5432/edumaster
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: super-secret-key-change-in-production
+      NODE_ENV: production
+      CORS_ORIGIN: http://localhost:3000
+    ports:
+      - "4000:4000"
+    depends_on:
+      - postgres
+      - redis
+
+volumes:
+  postgres_data:

@@ -1,0 +1,681 @@
+import fs from "fs";
+import path from "path";
+
+const outPath = path.join(process.cwd(), "offline-knowledge-graph.html");
+
+const emphasisStyles = {
+  definition: { color: "#2563eb", label: "Definition", desc: "A precise statement" },
+  concept: { color: "#0c6438", label: "Concept", desc: "An underlying idea" },
+  formula: { color: "#7c3aed", label: "Formula", desc: "A rule expressed in symbols" },
+  keyTerm: { color: "#f59e0b", label: "Key Term", desc: "Important vocabulary" },
+  caution: { color: "#e84545", label: "Caution", desc: "Common mistake or warning" },
+  example: { color: "#0891b2", label: "Example", desc: "Illustrative case" },
+  examTip: { color: "#db2777", label: "Exam Tip", desc: "Exam-specific advice" },
+};
+
+const emphasisWeight = {
+  1: { fw: 500, fs: 1, uw: 0, label: "Core" },
+  2: { fw: 700, fs: 1.08, uw: 2, label: "Important" },
+  3: { fw: 900, fs: 1.16, uw: 3, label: "Critical" },
+};
+
+const subjectColors = {
+  math: "#0c6438",
+  biology: "#0891b2",
+  chemistry: "#7c3aed",
+  physics: "#db2777",
+  english: "#f59e0b",
+};
+
+const subjects = [
+  { id: "math", name: "Mathematics", icon: "\u{1F4D0}" },
+  { id: "biology", name: "Biology", icon: "\u{1F9EC}" },
+  { id: "chemistry", name: "Chemistry", icon: "\u2697\uFE0F" },
+  { id: "physics", name: "Physics", icon: "\u269B\uFE0F" },
+  { id: "english", name: "English", icon: "\u{1F4D6}" },
+];
+
+const notes = {
+  math: {
+    "algebra-basics": {
+      title: "Algebra Basics",
+      summary:
+        "Introduction to variables, expressions, and basic equations in algebra.",
+      readingMinutes: 4,
+      keywords: [
+        { id: "kw1", term: "Variable", category: "keyTerm", level: 1, gloss: "Symbol for an unknown quantity" },
+        { id: "kw2", term: "Expression", category: "keyTerm", level: 2, gloss: "Combination of variables and constants" },
+        { id: "kw3", term: "Equation", category: "definition", level: 1, gloss: "A statement that two expressions are equal" },
+        { id: "kw4", term: "Solve", category: "concept", level: 3, gloss: "Find the value that makes an equation true" },
+      ],
+      blocks: [
+        { type: "h2", text: "Getting Started" },
+        { type: "p", text: "Algebra lets you work with [[kw3|equations]] using [[kw1|variables]]." },
+        { type: "list", items: ["Use letters for unknowns", "Combine terms carefully"] },
+        { type: "callout", tone: "tip", text: "Keep the balance: whatever you do to one side, do to the other side." },
+      ],
+    },
+    "linear-equations": {
+      title: "Linear Equations",
+      summary:
+        "Understanding and solving linear equations in one and two variables.",
+      readingMinutes: 6,
+      keywords: [
+        { id: "kw5", term: "Linear Equation", category: "definition", level: 1, gloss: "Equation whose graph is a straight line" },
+        { id: "kw6", term: "Slope", category: "formula", level: 2, gloss: "Rate of change, m" },
+        { id: "kw7", term: "Intercept", category: "concept", level: 2, gloss: "Where the line crosses an axis" },
+      ],
+      blocks: [
+        { type: "p", text: "Use [[kw6|slope]] and [[kw7|intercept]] to describe [[kw5|linear equations]]." },
+        { type: "formula", text: "y = mx + c" },
+      ],
+    },
+    "quadratics": {
+      title: "Quadratics",
+      summary:
+        "Quadratic equations, factoring, and the quadratic formula.",
+      readingMinutes: 8,
+      keywords: [
+        { id: "kw8", term: "Quadratic Equation", category: "definition", level: 1, gloss: "Equation of degree 2" },
+        { id: "kw9", term: "Discriminant", category: "formula", level: 3, gloss: "b² - 4ac" },
+      ],
+      blocks: [
+        { type: "formula", text: "x = (-b ± √(b² - 4ac)) / 2a" },
+        { type: "callout", tone: "caution", text: "Watch the sign of the discriminant." },
+      ],
+    },
+  },
+  biology: {
+    "cell-structure": {
+      title: "Cell Structure",
+      summary:
+        "Overview of prokaryotic and eukaryotic cell components and functions.",
+      readingMinutes: 5,
+      keywords: [
+        { id: "kw10", term: "Cell Membrane", category: "definition", level: 1, gloss: "Selective outer boundary" },
+        { id: "kw11", term: "Nucleus", category: "definition", level: 1, gloss: "Control center of the cell" },
+      ],
+      blocks: [
+        { type: "p", text: "The [[kw10|cell membrane]] controls entry and exit." },
+        { type: "list", items: ["Cell membrane controls entry and exit", "Nucleus contains DNA", "Mitochondria produce energy"] },
+      ],
+    },
+    "photosynthesis": {
+      title: "Photosynthesis",
+      summary:
+        "How plants convert light energy into chemical energy.",
+      readingMinutes: 7,
+      keywords: [
+        { id: "kw12", term: "Photosynthesis", category: "definition", level: 1, gloss: "Process that makes glucose from light" },
+      ],
+      blocks: [
+        { type: "formula", text: "6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂" },
+      ],
+    },
+  },
+  chemistry: {
+    "atomic-structure": {
+      title: "Atomic Structure",
+      summary:
+        "Protons, neutrons, electrons, and atomic number.",
+      readingMinutes: 4,
+      keywords: [
+        { id: "kw13", term: "Proton", category: "definition", level: 1, gloss: "Positive particle in the nucleus" },
+      ],
+      blocks: [
+        { type: "list", items: ["Protons = positive", "Electrons = negative", "Neutrons = neutral"] },
+      ],
+    },
+    "bonding": {
+      title: "Chemical Bonding",
+      summary: "Ionic, covalent, and metallic bonds.",
+      readingMinutes: 5,
+      keywords: [
+        { id: "kw14", term: "Ionic Bond", category: "definition", level: 1, gloss: "Transfer of electrons" },
+      ],
+      blocks: [
+        { type: "p", text: "Ionic bonds form when electrons transfer, creating charged ions." },
+      ],
+    },
+  },
+  physics: {
+    "motion": {
+      title: "Motion",
+      summary: "Distance, displacement, speed, velocity, and acceleration.",
+      readingMinutes: 6,
+      keywords: [
+        { id: "kw15", term: "Velocity", category: "definition", level: 1, gloss: "Speed with direction" },
+      ],
+      blocks: [
+        { type: "formula", text: "v = Δs / Δt" },
+      ],
+    },
+    "forces": {
+      title: "Forces",
+      summary: "Newton's laws and types of forces.",
+      readingMinutes: 6,
+      keywords: [
+        { id: "kw16", term: "Force", category: "definition", level: 1, gloss: "A push or pull" },
+      ],
+      blocks: [
+        { type: "formula", text: "F = ma" },
+      ],
+    },
+  },
+  english: {
+    "grammar-fundamentals": {
+      title: "Grammar Fundamentals",
+      summary: "Parts of speech, sentence structure, and common errors.",
+      readingMinutes: 5,
+      keywords: [
+        { id: "kw17", term: "Noun", category: "definition", level: 1, gloss: "Names a person, place, or thing" },
+      ],
+      blocks: [
+        { type: "list", items: ["Nouns name things", "Verbs show action", "Adjectives describe nouns"] },
+      ],
+    },
+    "essay-writing": {
+      title: "Essay Writing",
+      summary: "Structure, coherence, and argumentation in academic essays.",
+      readingMinutes: 7,
+      keywords: [
+        { id: "kw18", term: "Thesis", category: "definition", level: 1, gloss: "Main argument of an essay" },
+      ],
+      blocks: [
+        { type: "p", text: "Your [[kw18|thesis]] guides every paragraph." },
+      ],
+    },
+  },
+};
+
+const relations = [
+  { from: "math.algebra-basics", to: "math.linear-equations", type: "prerequisite" },
+  { from: "math.linear-equations", to: "math.quadratics", type: "prerequisite" },
+  { from: "biology.cell-structure", to: "biology.photosynthesis", type: "prerequisite" },
+  { from: "chemistry.atomic-structure", to: "chemistry.bonding", type: "prerequisite" },
+  { from: "physics.motion", to: "physics.forces", type: "prerequisite" },
+  { from: "math.quadratics", to: "physics.motion", type: "related" },
+  { from: "chemistry.bonding", to: "biology.cell-structure", type: "related" },
+  { from: "english.grammar-fundamentals", to: "english.essay-writing", type: "prerequisite" },
+];
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function tokenReplacer(html) {
+  return html.replace(/\[\[([a-zA-Z0-9_]+)\|([^\]]+)\]\]/g, (match, id, text) => {
+    let kw = null;
+    for (const sub of Object.values(notes)) {
+      for (const t of Object.values(sub)) {
+        kw = t.keywords.find((k) => k.id === id);
+        if (kw) break;
+      }
+      if (kw) break;
+    }
+    const cat = kw ? kw.category : "keyTerm";
+    const lvl = kw ? kw.level : 2;
+    const style = emphasisStyles[cat] || emphasisStyles.keyTerm;
+    const w = emphasisWeight[lvl] || emphasisWeight[2];
+    return `<kw style="color:${style.color};font-weight:${w.fw};font-size:${w.fs}rem;text-decoration:underline;text-decoration-color:${style.color};text-decoration-thickness:${w.uw}px;border-radius:.25rem;padding:0 .125rem;cursor:pointer;display:inline" onmouseenter="showTip(this,'${style.label}','${style.color}','${w.label}','${esc(kw ? kw.gloss : text)}')" onmouseleave="hideTip(this)">${esc(text)}</kw>`;
+  });
+}
+
+function renderBlocks(blocks) {
+  let html = "";
+  blocks.forEach((b) => {
+    if (b.type === "h2") html += `<h2 style="font-size:1.25rem;font-weight:700;margin:1rem 0 .5rem">${esc(b.text)}</h2>`;
+    else if (b.type === "h3") html += `<h3 style="font-size:1.125rem;font-weight:600;margin:1rem 0 .5rem">${esc(b.text)}</h3>`;
+    else if (b.type === "p") html += `<p style="margin:.5rem 0;line-height:1.7">${tokenReplacer(esc(b.text))}</p>`;
+    else if (b.type === "list") {
+      html += `<ul style="margin:.5rem 0;padding-left:1.25rem">`;
+      b.items.forEach((it) => html += `<li style="margin-bottom:.25rem">${tokenReplacer(esc(it))}</li>`);
+      html += `</ul>`;
+    } else if (b.type === "formula") {
+      html += `<div class="formula"><code style="font-size:1.1rem;font-weight:700;color:#0f172a">${esc(b.text)}</code></div>`;
+    } else if (b.type === "callout") {
+      const toneClass = b.tone === "caution" ? "callout-caution"
+        : b.tone === "tip" ? "callout-tip"
+        : "callout-note";
+      html += `<div class="${toneClass}">${tokenReplacer(esc(b.text))}</div>`;
+    } else if (b.type === "example") {
+      html += `<div class="callout-example"><strong>Example:</strong> ${tokenReplacer(esc(b.prompt || ""))}</div>`;
+    }
+  });
+  return html;
+}
+
+function topicDiagramFor(subjectId, topicId) {
+  const subjNotes = notes[subjectId];
+  const ids = Object.keys(subjNotes);
+  const W = 520;
+  const H = 360;
+  const cx = W / 2;
+  const cy = H / 2;
+  const R = 140;
+  const color = subjectColors[subjectId];
+
+  const positions = {};
+  ids.forEach((id, i) => {
+    const a = (i / ids.length) * 2 * Math.PI - Math.PI / 2;
+    positions[id] = { x: cx + R * Math.cos(a), y: cy + R * Math.sin(a) };
+  });
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:#fff;border-radius:.75rem;border:1px solid #e5e0d8">`;
+
+  relations.forEach((rel) => {
+    const p = rel.from.split(".");
+    const q = rel.to.split(".");
+    if (p[0] !== subjectId || q[0] !== subjectId) return;
+    const a = positions[p[1]];
+    const b = positions[q[1]];
+    if (!a || !b) return;
+    const relColor = rel.type === "prerequisite" ? "#f59e0b"
+      : rel.type === "leadsTo" ? "#0c6438"
+      : "#94a3b8";
+    svg += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${relColor}" stroke-width="2" stroke-linecap="round" opacity="0.8"/>`;
+  });
+
+  ids.forEach((id) => {
+    const p = positions[id];
+    const r = id === topicId ? 20 : 16;
+    const isFocal = id === topicId;
+    svg += `<g transform="translate(${p.x},${p.y})">`;
+    if (isFocal) svg += `<circle r="${r + 6}" fill="none" stroke="#fff" stroke-width="3" opacity="0.9"/>`;
+    svg += `<circle r="${r}" fill="${color}" stroke="#fff" stroke-width="2"/>`;
+    svg += `<text text-anchor="middle" dy="4" font-size="10" font-weight="700" fill="#fff">${id.charAt(0).toUpperCase()}</text>`;
+    svg += `<text text-anchor="middle" y="${r + 14}" font-size="11" font-weight="600" fill="${isFocal ? '#0d1f12' : '#475569'}">${esc(subjNotes[id].title)}</text>`;
+    svg += `</g>`;
+  });
+
+  svg += `</svg>`;
+  return svg;
+}
+
+function graphOverview() {
+  const W = 520;
+  const H = 360;
+  const cx = W / 2;
+  const cy = H / 2;
+  const R = 130;
+
+  let nodes = [];
+  subjects.forEach((s, i) => {
+    const a = (i / subjects.length) * 2 * Math.PI - Math.PI / 2;
+    const x = cx + R * Math.cos(a);
+    const y = cy + R * Math.sin(a);
+    nodes.push(`<g transform="translate(${x},${y})"><circle r="18" fill="${subjectColors[s.id]}" stroke="#fff" stroke-width="2"/><text text-anchor="middle" dy="4" font-size="11" font-weight="700" fill="#fff">${esc(s.name)}</text></g>`);
+  });
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:#fff;border-radius:.75rem;border:1px solid #e5e0d8">${nodes.join("")}</svg>`;
+}
+
+function buildHtml() {
+  let html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EduMaster Africa – Offline Knowledge Graph</title>
+<style>
+:root{--background:#f7f4ef;--foreground:#0d1f12;--card:#ffffff;--primary:#0c6438;--primary-foreground:#ffffff;--secondary:#fff8e6;--muted:#ece8e0;--muted-foreground:#5c6b5e;--border:#e5e0d8;--radius:0.75rem}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--background);color:var(--foreground);font-family:Inter,system-ui,-apple-system,sans-serif;line-height:1.6}
+h1,h2,h3,h4{font-weight:700;line-height:1.3}
+.container{max-width:1200px;margin:0 auto;padding:1rem}
+@media(min-width:1024px){.container{padding:2rem}}
+.sidebar{background:#ffffff;border:1px solid var(--border);border-radius:var(--radius);padding:1rem}
+.topic-nav-item{padding:.5rem .75rem;border-radius:var(--radius);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:.5rem;font-size:.875rem;border:1px solid transparent;background:transparent;color:#475569;width:100%;text-align:left}
+.topic-nav-item:hover{background:#f8f5f0;color:#0d1f12}
+.topic-nav-item.active{background:#0c6438;color:#fff;border-color:#0c6438}
+.badge{display:inline-flex;align-items:center;padding:.15rem .6rem;border-radius:9999px;background:#dcfce7;color:#0c6438;font-size:.7rem;font-weight:700;white-space:nowrap}
+.callout{border-radius:var(--radius);padding:.75rem .9rem;margin:.5rem 0;border-left-width:4px;border-left-style:solid}
+.callout-caution{border-left-color:#e84545;background:#fef2f2;color:#7f1d1d}
+.callout-tip{border-left-color:#db2777;background:#fdf2f8;color:#831843}
+.callout-note{border-left-color:#0c6438;background:#ecfdf5;color:#064e3b}
+.callout-example{border-left-color:#0891b2;background:#ecfeff;color:#164e63}
+.formula{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:var(--radius);padding:1rem;margin:.75rem 0}
+.svg-diagram-container{background:#fff;border-radius:var(--radius);border:1px solid var(--border);padding:.5rem;overflow:hidden}
+.diagram-legend-item{display:inline-flex;align-items:center;gap:.375rem;font-size:.75rem;color:#475569}
+.diagram-legend-dot{display:inline-block;height:.5rem;width:1.25rem;border-radius:9999px}
+kw{position:relative;cursor:pointer;border-radius:.25rem;padding:0 .125rem;transition:background .15s;display:inline}
+kw:hover{filter:brightness(1.1)}
+kw .tooltip{display:none;position:absolute;bottom:calc(100% + 6px);left:0;z-index:50;width:16rem;padding:.75rem;border-radius:var(--radius);border:1px solid var(--border);background:#fff;box-shadow:0 10px 15px -3px rgba(0,0,0,.1);font-size:.75rem;font-weight:400;color:var(--foreground);line-height:1.5}
+kw:hover .tooltip{display:block}
+kw .tooltip .tt-header{display:flex;align-items:center;gap:.5rem;margin-bottom:.375rem}
+kw .tooltip .tt-dot{display:inline-block;height:.625rem;width:.625rem;border-radius:9999px}
+kw .tooltip .tt-label{font-weight:700}
+kw .tooltip .tt-level{margin-left:auto;padding:.125rem .5rem;border-radius:9999px;background:var(--muted);font-size:.6875rem;font-weight:600;color:var(--muted-foreground)}
+kw .tooltip .tt-desc{color:var(--muted-foreground)}
+.btn{padding:.5rem 1rem;border-radius:var(--radius);border:none;cursor:pointer;font-weight:600;font-size:.875rem}
+.btn-primary{background:var(--primary);color:var(--primary-foreground)}
+.btn-secondary{background:var(--secondary);color:var(--foreground)}
+.card{border:1px solid var(--border);border-radius:var(--radius);background:var(--card)}
+.card-body{padding:1.25rem}
+.grid{display:grid;gap:1rem}
+.text-sm{font-size:.875rem}.text-xs{font-size:.75rem}.text-lg{font-size:1.125rem}.text-2xl{font-size:1.5rem}
+.font-bold{font-weight:700}.font-semibold{font-weight:600}
+.uppercase{text-transform:uppercase}.tracking-widest{letter-spacing:.1em}
+.text-muted{color:var(--muted-foreground)}.text-foreground{color:var(--foreground)}
+.mb-4{margin-bottom:1rem}.mt-2{margin-top:.5rem}.mt-4{margin-top:1rem}.mt-6{margin-top:1.5rem}
+.flex{display:flex}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.flex-1{flex:1 1 0%}
+.items-center{align-items:center}.gap-1{gap:.25rem}.gap-2{gap:.5rem}.gap-3{gap:.75rem}.gap-4{gap:1rem}
+.justify-between{justify-content:space-between}.justify-center{justify-content:center}
+.p-4{padding:1rem}.p-5{padding:1.25rem}
+.w-full{width:100%}
+.overflow-x-auto{overflow-x:auto}
+.cache-status{padding:.5rem .75rem;border-radius:var(--radius);background:#fff;border:1px solid var(--border);font-size:.875rem}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border-width:0}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+`;
+
+  html += `
+const EMPHASIS_STYLES = ${JSON.stringify(emphasisStyles)};
+const EMPHASIS_WEIGHT = ${JSON.stringify(emphasisWeight)};
+const SUBJECTS = ${JSON.stringify(subjects)};
+const NOTES = ${JSON.stringify(notes)};
+const RELATIONS = ${JSON.stringify(relations)};
+const SUBJECT_COLORS = ${JSON.stringify(subjectColors)};
+
+const TOPIC_LIST = [];
+Object.keys(NOTES).forEach(function(subjectId) {
+  Object.keys(NOTES[subjectId]).forEach(function(topicId) {
+    TOPIC_LIST.push({ subjectId: subjectId, topicId: topicId, title: NOTES[subjectId][topicId].title });
+  });
+});
+
+const STORAGE_KEY = "edu.offline.state.v1";
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return { subject: "math", topic: "algebra-basics", view: "topic" };
+}
+
+function saveState(state) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+
+let state = loadState();
+if (!NOTES[state.subject] || !NOTES[state.subject][state.topic]) {
+  state = { subject: "math", topic: "algebra-basics", view: "topic" };
+}
+
+function setState(next) {
+  state = Object.assign(state, next);
+  saveState(state);
+  render();
+}
+
+function showTip(el, label, color, level, desc) {
+  const existing = el.querySelector(".tooltip");
+  if (existing) existing.remove();
+  const tip = document.createElement("span");
+  tip.className = "tooltip";
+  tip.innerHTML = '<div class="tt-header"><span class="tt-dot" style="background:' + color + '"></span><span class="tt-label">' + label + '</span><span class="tt-level">' + level + '</span></div><div class="tt-desc">' + desc + '</div>';
+  el.appendChild(tip);
+}
+
+function hideTip(el) {
+  const tip = el.querySelector(".tooltip");
+  if (tip) tip.remove();
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function tokenReplacer(value) {
+  return value.replace(/\\[\\[([a-zA-Z0-9_]+)\\|([^\\]]+)\\]\\]/g, function(match, id, text) {
+    let kw = null;
+    const values = Object.values(NOTES);
+    for (let i = 0; i < values.length; i++) {
+      const subValues = Object.values(values[i]);
+      for (let j = 0; j < subValues.length; j++) {
+        const found = subValues[j].keywords.find((k) => k.id === id);
+        if (found) { kw = found; break; }
+      }
+      if (kw) break;
+    }
+    const cat = kw ? kw.category : "keyTerm";
+    const lvl = kw ? kw.level : 2;
+    const style = EMPHASIS_STYLES[cat] || EMPHASIS_STYLES.keyTerm;
+    const w = EMPHASIS_WEIGHT[lvl] || EMPHASIS_WEIGHT[2];
+    const gloss = kw ? kw.gloss : text;
+    return '<kw style="color:' + style.color + ';font-weight:' + w.fw + ';font-size:' + w.fs + 'rem;text-decoration:underline;text-decoration-color:' + style.color + ';text-decoration-thickness:' + w.uw + 'px;border-radius:.25rem;padding:0 .125rem;cursor:pointer;display:inline" onmouseenter="showTip(this,\'' + style.label + '\',\'' + style.color + '\',\'' + w.label + '\',\'' + esc(gloss) + '\')" onmouseleave="hideTip(this)">' + esc(text) + '</kw>';
+  });
+}
+
+function renderBlocks(blocks) {
+  let html = "";
+  blocks.forEach(function(b) {
+    if (b.type === "h2") html += '<h2 style="font-size:1.25rem;font-weight:700;margin:1rem 0 .5rem">' + esc(b.text) + '</h2>';
+    else if (b.type === "h3") html += '<h3 style="font-size:1.125rem;font-weight:600;margin:1rem 0 .5rem">' + esc(b.text) + '</h3>';
+    else if (b.type === "p") html += '<p style="margin:.5rem 0;line-height:1.7">' + tokenReplacer(esc(b.text)) + '</p>';
+    else if (b.type === "list") {
+      html += '<ul style="margin:.5rem 0;padding-left:1.25rem">';
+      b.items.forEach(function(it) { html += '<li style="margin-bottom:.25rem">' + tokenReplacer(esc(it)) + '</li>'; });
+      html += '</ul>';
+    } else if (b.type === "formula") {
+      html += '<div class="formula"><code style="font-size:1.1rem;font-weight:700;color:#0f172a">' + esc(b.text) + '</code></div>';
+    } else if (b.type === "callout") {
+      const cls = b.tone === "caution" ? "callout-caution"
+        : b.tone === "tip" ? "callout-tip"
+        : "callout-note";
+      html += '<div class="' + cls + '">' + tokenReplacer(esc(b.text)) + '</div>';
+    } else if (b.type === "example") {
+      html += '<div class="callout-example"><strong>Example:</strong> ' + tokenReplacer(esc(b.prompt || "")) + '</div>';
+    }
+  });
+  return html;
+}
+
+function diagramFor(subjectId, topicId) {
+  const subjNotes = NOTES[subjectId];
+  const ids = Object.keys(subjNotes);
+  const W = 520;
+  const H = 360;
+  const cx = W / 2;
+  const cy = H / 2;
+  const R = 140;
+  const color = SUBJECT_COLORS[subjectId];
+
+  const positions = {};
+  ids.forEach(function(id, i) {
+    const a = (i / ids.length) * 2 * Math.PI - Math.PI / 2;
+    positions[id] = { x: cx + R * Math.cos(a), y: cy + R * Math.sin(a) };
+  });
+
+  let nodes = [];
+  let edges = [];
+
+  RELATIONS.forEach(function(rel) {
+    const p = rel.from.split(".");
+    const q = rel.to.split(".");
+    if (p[0] !== subjectId || q[0] !== subjectId) return;
+    const a = positions[p[1]];
+    const b = positions[q[1]];
+    if (!a || !b) return;
+    const relColor = rel.type === "prerequisite" ? "#f59e0b"
+      : rel.type === "leadsTo" ? "#0c6438"
+      : "#94a3b8";
+    edges.push('<line x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" stroke="' + relColor + '" stroke-width="2" stroke-linecap="round" opacity="0.8"/>');
+  });
+
+  ids.forEach(function(id) {
+    const p = positions[id];
+    const r = id === topicId ? 20 : 16;
+    const isFocal = id === topicId;
+    nodes.push('<g transform="translate(' + p.x + ',' + p.y + ')">');
+    if (isFocal) nodes.push('<circle r="' + (r + 6) + '" fill="none" stroke="#fff" stroke-width="3" opacity="0.9"/>');
+    nodes.push('<circle r="' + r + '" fill="' + color + '" stroke="#fff" stroke-width="2"/>');
+    nodes.push('<text text-anchor="middle" dy="4" font-size="10" font-weight="700" fill="#fff">' + id.charAt(0).toUpperCase() + '</text>');
+    nodes.push('<text text-anchor="middle" y="' + (r + 14) + '" font-size="11" font-weight="600" fill="' + (isFocal ? '#0d1f12' : '#475569') + '">' + esc(subjNotes[id].title) + '</text>');
+    nodes.push('</g>');
+  });
+
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;background:#fff;border-radius:.75rem;border:1px solid #e5e0d8">' + edges.join("") + nodes.join("") + '</svg>';
+}
+
+function graphOverview() {
+  const W = 520;
+  const H = 360;
+  const cx = W / 2;
+  const cy = H / 2;
+  const R = 130;
+
+  let nodes = [];
+  subjects.forEach(function(s, i) {
+    const a = (i / subjects.length) * 2 * Math.PI - Math.PI / 2;
+    const x = cx + R * Math.cos(a);
+    const y = cy + R * Math.sin(a);
+    nodes.push('<g transform="translate(' + x + ',' + y + ')"><circle r="18" fill="' + SUBJECT_COLORS[s.id] + '" stroke="#fff" stroke-width="2"/><text text-anchor="middle" dy="4" font-size="11" font-weight="700" fill="#fff">' + esc(s.name) + '</text></g>');
+  });
+
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;background:#fff;border-radius:.75rem;border:1px solid #e5e0d8">' + nodes.join("") + '</svg>';
+}
+
+function renderSidebar() {
+  let html = '<div class="sidebar"><div class="text-sm font-bold mb-3 uppercase tracking-widest text-muted">Subjects</div><div class="flex flex-col gap-1">';
+  SUBJECTS.forEach(function(s) {
+    const active = state.subject === s.id ? "active" : "";
+    html += '<button class="topic-nav-item ' + active + '" onclick="setSubject(\'' + s.id + '\')">' + s.icon + ' ' + s.name + '</button>';
+  });
+  html += '</div>';
+  html += '<button class="btn btn-secondary" style="width:100%;margin-top:1rem" onclick="setView(\'graph\')">Full Knowledge Graph</button>';
+  html += '<div class="cache-status" style="margin-top:.75rem"><div class="text-xs text-muted">Offline Cache</div><div id="cache-size" class="text-sm font-bold">Checking\u2026</div></div>';
+  html += '</div>';
+  return html;
+}
+
+function setSubject(sid) {
+  const first = Object.keys(NOTES[sid])[0];
+  setState({ subject: sid, topic: first, view: "topic" });
+}
+
+function setTopic(tid) {
+  setState({ topic: tid, view: "topic" });
+}
+
+function setView(v) {
+  setState({ view: v });
+}
+
+function renderTopicNav() {
+  const topics = TOPIC_LIST.filter(function(t) { return t.subjectId === state.subject; });
+  let html = '<div class="flex gap-2 overflow-x-auto" style="padding-bottom:.5rem">';
+  topics.forEach(function(t) {
+    const active = state.topic === t.topicId ? "active" : "";
+    html += '<button class="topic-nav-item ' + active + '" onclick="setTopic(\'' + t.topicId + '\')">' + esc(t.title) + '</button>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function renderContent() {
+  const data = NOTES[state.subject][state.topic];
+  let html = '<div class="card-body"><div class="flex items-center justify-between mb-4"><div><h1 class="text-2xl font-bold mb-1">' + esc(data.title) + '</h1><p class="text-muted">' + esc(data.summary) + '</p></div><span class="badge">' + esc(data.subject || state.subject) + ' \u00B7 ' + data.readingMinutes + ' min</span></div>';
+  html += renderBlocks(data.blocks);
+
+  html += '<div class="mt-6"><h3 class="text-lg font-bold mb-3">Keywords</h3><div class="flex flex-wrap gap-2">';
+  data.keywords.forEach(function(k) {
+    const style = EMPHASIS_STYLES[k.category] || EMPHASIS_STYLES.keyTerm;
+    const w = EMPHASIS_WEIGHT[k.level] || EMPHASIS_WEIGHT[2];
+    html += '<span class="badge" style="background:' + style.color + '20;color:' + style.color + '">' + esc(k.term) + ' <span style="opacity:.7;font-size:.7rem">' + w.label + '</span></span>';
+  });
+  html += '</div></div>';
+
+  html += '<div class="mt-6"><h3 class="text-lg font-bold mb-3">Knowledge Diagram</h3><div class="svg-diagram-container">' + diagramFor(state.subject, state.topic) + '</div></div>';
+
+  html += '</div>';
+  return html;
+}
+
+function renderGraphOverview() {
+  let html = '<div class="card-body"><h2 class="text-2xl font-bold mb-4">Knowledge Graph</h2><div class="svg-diagram-container">' + graphOverview() + '</div>';
+  html += '<div class="flex flex-wrap gap-4 mt-4"><div><div class="font-bold text-sm mb-2">Relation Types</div>';
+  ["prerequisite","leadsTo","related"].forEach(function(k) {
+    const c = k === "prerequisite" ? "#f59e0b" : k === "leadsTo" ? "#0c6438" : "#94a3b8";
+    const l = k === "prerequisite" ? "Prerequisite" : k === "leadsTo" ? "Leads to" : "Related";
+    html += '<div class="diagram-legend-item"><span class="diagram-legend-dot" style="background:' + c + '"></span>' + l + '</div>';
+  });
+  html += '</div></div></div>';
+  return html;
+}
+
+function render() {
+  const app = document.getElementById("app");
+  let html = '<div class="container"><div class="grid gap-6" style="grid-template-columns:280px 1fr">';
+
+  html += renderSidebar();
+
+  if (state.view === "graph") {
+    html += renderGraphOverview();
+  } else {
+    html += '<div class="flex flex-col gap-4"><div>' + renderTopicNav() + '</div><div class="card">' + renderContent() + '</div></div>';
+  }
+
+  html += '</div></div>';
+  app.innerHTML = html;
+
+  const cacheEl = document.getElementById("cache-size");
+  if (cacheEl) {
+    let bytes = 0;
+    for (let key in localStorage) {
+      if (localStorage.hasOwnProperty(key)) {
+        bytes += localStorage[key].length * 2;
+      }
+    }
+    cacheEl.textContent = (bytes / 1024).toFixed(1) + " KB";
+  }
+}
+
+function renderOfflineNotice() {
+  const el = document.createElement("div");
+  el.style.cssText = "position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:#0d1f12;color:#fff;padding:.5rem 1rem;border-radius:9999px;font-size:.75rem;z-index:100;box-shadow:0 10px 15px -3px rgba(0,0,0,.1);transition:opacity .3s";
+  el.textContent = "You are offline \u2014 notes loaded from local cache";
+  document.body.appendChild(el);
+  setTimeout(function() { el.style.opacity = "0"; setTimeout(function() { el.remove(); }, 300); }, 3000);
+}
+
+window.addEventListener("hashchange", function() {
+  const h = location.hash.replace("#", "");
+  if (h) {
+    const parts = h.split("/");
+    if (parts.length >= 1) state.subject = parts[0];
+    if (parts.length >= 2) state.topic = parts[1];
+  }
+  render();
+});
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("data:text/javascript," + encodeURIComponent("self.addEventListener('fetch', function(e) { e.respondWith(fetch(e.request).catch(function() { return new Response('Offline cache ready'); })); });"))
+    .catch(function() {});
+}
+
+if (!navigator.onLine) renderOfflineNotice();
+
+render();
+`;
+
+  html += `</script></body></html>`;
+  return html;
+}
+
+const data = buildHtml();
+fs.writeFileSync(outPath, data, "utf8");
+console.log("Built:", outPath, "chars:", data.length);
